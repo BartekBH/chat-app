@@ -15,7 +15,7 @@ object Server {
       .default[F]
       .withHost(host)
       .withPort(port)
-      .withHttpApp(new Routes().service)
+      .withHttpWebSocketApp(wsb => new Routes().service(wsb))
       .build
       .useForever
       .void
