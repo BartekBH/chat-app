@@ -2,7 +2,7 @@ package chatapp
 
 import cats.effect.Async
 import cats.effect.std.Queue
-import com.comcast.ip4s.{Port, host, port}
+import com.comcast.ip4s.{Host, Port, host, port}
 import fs2.io.file.Files
 import fs2.io.net.Network
 import org.http4s.ember.server.EmberServerBuilder
@@ -19,7 +19,7 @@ object Server {
     protocol: Protocol[F],
     cs: Ref[F, ChatState]
   ): F[Unit] = {
-    val host = host"0.0.0.0"
+    val host = Host.fromString(Properties.envOrElse("HOST", "0.0.0.0")).getOrElse(host"0.0.0.0")
     val port = Port.fromString(Properties.envOrElse("PORT", "8080")).getOrElse(port"8080")
     EmberServerBuilder
       .default[F]
