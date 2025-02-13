@@ -1,11 +1,12 @@
-ThisBuild / version := "0.1.0-SNAPSHOT"
+name := "chat-app"
 
-ThisBuild / scalaVersion := "3.6.2"
+version := "0.1"
 
-lazy val root = (project in file("."))
-  .settings(
-    name := "chat-app"
-  )
+scalaVersion := "3.6.2"
+
+enablePlugins(JavaAppPackaging)
+
+mainClass in Compile := Some("chatapp.Pogram")
 
 val Http4sVersion = "0.23.27"
 val CirceVersion = "0.14.7"
