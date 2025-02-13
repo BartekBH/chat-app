@@ -30,7 +30,8 @@ class Routes[F[_]: Files: Temporal] extends Http4sDsl[F] {
       case request @ GET -> Root =>
         StaticFile
           .fromPath(
-            fs2.io.file.Path(getClass.getClassLoader.getResource("./chat.html").getFile),
+//            fs2.io.file.Path(getClass.getClassLoader.getResource("chat.html").getFile),
+            fs2.io.file.Path("./chat.html"),
             Some(request)
           )
         .getOrElseF(NotFound())
