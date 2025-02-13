@@ -19,7 +19,7 @@ trait Protocol[F[_]] {
 }
 
 object Protocol {
-  def make[F[_]: Monad](chatState: Ref[F, ChatState]): Protocol[F] = {
+  def make[F[_]](chatState: Ref[F, ChatState])(implicit monad: Monad[F]): Protocol[F] = {
     new Protocol[F] {
       override def register(name: String): F[OutputMessage] = {
         User(name) match {

@@ -1,5 +1,7 @@
 package chatapp
 
+//import chatapp.domain.user.*
+
 sealed trait OutputMessage
 
 case class Register(
