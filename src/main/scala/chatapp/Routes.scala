@@ -31,7 +31,7 @@ class Routes[F[_]: Files: Temporal] extends Http4sDsl[F] {
         StaticFile
           .fromPath(
 //            fs2.io.file.Path(getClass.getClassLoader.getResource("chat.html").getFile),
-            fs2.io.file.Path("./chat.html"),
+            fs2.io.file.Path("./index.html"),
             Some(request)
           )
         .getOrElseF(NotFound())
