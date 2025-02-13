@@ -8,7 +8,6 @@ import fs2.io.net.Network
 import org.http4s.ember.server.EmberServerBuilder
 import cats.syntax.all.*
 import fs2.concurrent.Topic
-import org.http4s.websocket.WebSocketFrame
 import cats.effect.kernel.Ref
 
 import scala.util.Properties
