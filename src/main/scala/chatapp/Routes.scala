@@ -29,7 +29,7 @@ class Routes[F[_]: Files: Temporal] extends Http4sDsl[F] {
     cs: Ref[F, ChatState]
   ): HttpApp[F] = {
     HttpRoutes.of[F] {
-      case request @ get -> Root / "chat.html" =>
+      case request @ get -> Root =>
         StaticFile
           .fromPath(
             fs2.io.file.Path(getClass.getClassLoader.getResource("chat.html").getFile),
