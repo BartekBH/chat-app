@@ -6,7 +6,7 @@ scalaVersion := "3.6.2"
 
 enablePlugins(JavaAppPackaging)
 
-mainClass in Compile := Some("chatapp.Program")
+mainClass in (Compile,run) := Some("chatapp.Program")
 
 val Http4sVersion = "0.23.27"
 val CirceVersion = "0.14.7"
