@@ -14,6 +14,12 @@ assembly / assemblyMergeStrategy := {
   case _                        => MergeStrategy.first
 }
 
+Compile / javaOptions ++= Seq(
+  "-Xms512M",
+  "-Xmx512M",
+  "-XX:MaxMetaspaceSize=512M"
+)
+
 libraryDependencies ++= Seq(
   "org.http4s" %% "http4s-ember-server" % Http4sVersion,
   "org.http4s" %% "http4s-circe" % Http4sVersion,
