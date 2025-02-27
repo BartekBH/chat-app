@@ -43,7 +43,7 @@
             } if (obj.SendToUser) {
                 output.append(colorText(obj.SendToUser.msg, "green"))
             } else if (obj.ChatMsg) {
-                output.append(colorText(obj.ChatMsg.from.name + " : " + obj.ChatMsg.msg, "purple"))
+                output.append(colorText(obj.ChatMsg.from.name.name + " : " + obj.ChatMsg.msg, "purple"))
             } else { }
             output.scrollTop = output.scrollHeight;
         };

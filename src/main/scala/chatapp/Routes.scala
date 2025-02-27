@@ -1,41 +1,44 @@
 package chatapp
 
-import cats.MonadThrow
+import cats.effect.Async
+import cats.effect.kernel.Ref
+import cats.effect.std.Queue
+import cats.syntax.all.*
+import chatapp.domain.user.User
+import fs2.concurrent.Topic
 import fs2.{Pipe, Stream}
-import fs2.io.file.Files
-import org.http4s.{HttpApp, HttpRoutes, StaticFile}
+import io.circe.syntax.*
 import org.http4s.dsl.Http4sDsl
 import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
-import cats.effect.std.Queue
-import cats.effect.kernel.Concurrent
-import cats.syntax.all.*
-import fs2.concurrent.Topic
-import cats.effect.kernel.Ref
-import cats.effect.Temporal
-import scala.concurrent.duration.*
-import io.circe.generic.auto.*
-import io.circe.syntax.*
-import org.http4s.MediaType
+import org.http4s.*
+import org.http4s.dsl.io.*
 import org.http4s.headers.`Content-Type`
 
-class Routes[F[_]: Files: Temporal] extends Http4sDsl[F] {
+import scala.concurrent.duration.*
+
+class Routes[F[_]: Async] extends Http4sDsl[F] {
   def service(
     wsb: WebSocketBuilder2[F],
     q: Queue[F, OutputMessage],
     t: Topic[F, OutputMessage],
     im: InputMessage[F],
-    protocol: Protocol[F],
-    cs: Ref[F, ChatState]
+    chatP: ChatProtocol[F]
   ): HttpApp[F] = {
     HttpRoutes.of[F] {
-      case request @ get -> Root / "chat.html" =>
+      case request @ GET -> Root =>
         StaticFile
-          .fromPath(
-            fs2.io.file.Path(getClass.getClassLoader.getResource("chat.html").getFile),
-            Some(request)
-          )
-        .getOrElseF(NotFound())
+          .fromResource("chat.html", Some(request))
+          .getOrElseF(NotFound())
+
+      case GET -> Root / "metrics" =>
+        def currentState: F[String] = {
+          chatP.chatState
+        }
+
+        currentState.flatMap { currState =>
+          Ok(currState, `Content-Type`(MediaType.text.html))
+        }
 
       case GET -> Root / "ws" =>
         for {
@@ -43,71 +46,40 @@ class Routes[F[_]: Files: Temporal] extends Http4sDsl[F] {
           uQueue <- Queue.unbounded[F, OutputMessage]
           ws <- wsb.build(
             send(t, uQueue, uRef),
-            receive(protocol, im, uRef, q, uQueue)
+            receive(chatP, im, uRef, q, uQueue)
           )
         } yield ws
-
-      case GET -> Root / "metrics" =>
-        def currentState: F[String] = {
-          cs.get.map { cState =>
-            s"""
-               |<!Doctype html>
-               |<title>Chat Server State</title>
-               |<body>
-               |<pre>Users: ${cState.userRooms.keys.size}</pre>
-               |<pre>Rooms: ${cState.roomMembers.keys.size}</pre>
-               |<pre>Overview:
-               |${
-              cState.roomMembers.keys.toList
-                .map(room =>
-                  cState.roomMembers
-                    .getOrElse(room, Set())
-                    .map(_.name)
-                    .toList
-                    .sorted
-                    .mkString(s"${room.room} Room Members:\n\t", "\n\t", "")
-                )
-                .mkString("Rooms:\n\t", "\n\t", "")}
-               |</pre>
-               |</body>
-               |</html>
-            """.stripMargin
-          }
-        }
-
-        currentState.flatMap { currState =>
-          Ok(currState, `Content-Type`(MediaType.text.html))
-        }
-    }.orNotFound
-  }
+    }
+  }.orNotFound
 
   private def handleWebSocketStream(
     wsf: Stream[F, WebSocketFrame],
     im: InputMessage[F],
-    protocol: Protocol[F],
+    chatP: ChatProtocol[F],
     uRef: Ref[F, Option[User]]
   ): Stream[F, OutputMessage] = {
     for {
       sf <- wsf
+      maybeuser <- Stream.eval(uRef.get)
       om <- Stream.evalSeq(
         sf match {
           case WebSocketFrame.Text(text, _) =>
             im.parse(uRef, text)
           case WebSocketFrame.Close(_) =>
-            protocol.disconnect(uRef)
+            chatP.disconnect(maybeuser)
         }
       )
     } yield om
   }
 
   private def receive(
-    protocol: Protocol[F],
+    chatP: ChatProtocol[F],
     im: InputMessage[F],
     uRef: Ref[F, Option[User]],
     q: Queue[F, OutputMessage],
     uQueue: Queue[F, OutputMessage]
   ): Pipe[F, WebSocketFrame, Unit] = { wsf =>
-    handleWebSocketStream(wsf, im, protocol, uRef)
+    handleWebSocketStream(wsf, im, chatP, uRef)
       .evalMap { m =>
         uRef.get.flatMap {
           case Some(_) =>
@@ -130,14 +102,10 @@ class Routes[F[_]: Files: Temporal] extends Http4sDsl[F] {
   ): F[Boolean] = {
     msg match {
       case DiscardMessage => false.pure[F]
-      case sendtouser@SendToUser(_, _) =>
-        userRef.get.map {
-          _.fold(false)(u => sendtouser.forUser(u))
-        }
-      case chatmsg@ChatMsg(_, _, _) =>
-        userRef.get.map {
-          _.fold(false)(u => chatmsg.forUser(u))
-        }
+      case sendtouser @ SendToUser(_, _) =>
+        userRef.get.map { _.fold(false)(u => sendtouser.forUser(u)) }
+      case chatmsg @ ChatMsg(_, _, _) =>
+        userRef.get.map { _.fold(false)(u => chatmsg.forUser(u)) }
       case _ => true.pure[F]
     }
   }
@@ -145,7 +113,7 @@ class Routes[F[_]: Files: Temporal] extends Http4sDsl[F] {
   private def processMsg(msg: OutputMessage): WebSocketFrame = {
     msg match {
       case KeepAlive => WebSocketFrame.Ping()
-      case msg@_ => WebSocketFrame.Text(msg.asJson.noSpaces)
+      case msg @ _   => WebSocketFrame.Text(msg.asJson.noSpaces)
     }
   }
 
@@ -159,7 +127,7 @@ class Routes[F[_]: Files: Temporal] extends Http4sDsl[F] {
         .fromQueueUnterminated(uQueue)
         .filter {
           case DiscardMessage => false
-          case _ => true
+          case _              => true
         }
         .map(processMsg)
 
@@ -170,4 +138,5 @@ class Routes[F[_]: Files: Temporal] extends Http4sDsl[F] {
 
     Stream(uStream, mainStream).parJoinUnbounded
   }
+
 }
